@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <style type="text/css">
+    input {
+      width: 100%;
+    }
+    form {
+      width: 400px;
+      margin: auto;
+    }
+  </style>
+  <body>
+      <form
+        enctype="multipart/form-data"
+        method="post"
+        action="http://localhost:8000/cgi-bin/add.py">
+        <label for="product_name">Product or package name:</label>
+        <input type="text" name="product_name" id="product_name" />
+
+        <label for="product_version">Version:</label>
+        <input type="text" name="product_version" id="product_version" />
+
+        <label for="comment">Comment:</label>
+        <input type="text" name="comment" id="comment" />
+
+        <label for="zip">Zip file:</label>
+        <input type="file" name="zip" id="zip" />
+
+        <input type="submit"  value="Send file" />
+      </form>
+  </body>
+</html>
