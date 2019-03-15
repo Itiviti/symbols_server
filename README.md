@@ -1,4 +1,4 @@
-# symbols_server
+# Symbols Server
 Provide http server for symbols (PDBs) and a way to manage them
 
 Currently, it is making available symbols through _symbols_ folder.
@@ -10,9 +10,9 @@ The server is doing an itegration test at startup.
 
 ## To do:
 - remove symbols
-- list symbols (but already accessible through _/symbols/00Admin/server.txt_, symstore format)
+- list symbols (but already accessible through _/symbols/000Admin/server.txt_, symstore format)
 
-## Microsoft documentation around symtore tool
+## Microsoft documentation around symstore tool
 
 [SymStore Command-Line Options](https://msdn.microsoft.com/fr-fr/library/windows/desktop/ms681378(v=vs.85).aspx) - Full command line documentation
 
