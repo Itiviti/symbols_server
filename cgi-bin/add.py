@@ -1,5 +1,6 @@
 #!python
 
+import imp
 import collections
 import json
 import tempfile
@@ -11,6 +12,8 @@ from uuid import uuid4
 from os import path
 from os.path import join
 from cgi import FieldStorage
+
+symbols_server_common = imp.load_source('symbols_server_common', 'symbols_server_common.py')
 from symbols_server_common import *
 
 

@@ -15,7 +15,7 @@ import requests
 
 from symbols_server_common import *
 
-port = 8000
+port = 80
 cgi_folder_name = 'cgi-bin'
 symbols_folder = 'symbols'
 history_file_path = '000Admin/history.txt'
@@ -73,6 +73,7 @@ class Tests:
                     Fields.product_name: product_name,
                     Fields.product_version: product_version,
                     Fields.comment: comment})
+            #print('result.content=' + result.content)
             json_result = json.loads(result.content)
             assert json_result["status"] == "success", json_result["message"]
         dll_url = urljoin(self.get_symbols_address(), "System.Reactive.dll/A3630135134000/System.Reactive.dl_")
@@ -106,12 +107,14 @@ class Tests:
         thread = Thread(target=threaded_function)
         thread.start()
 
-        self.test_add_symbols_and_check_availability()
-
-        server.shutdown()
-        thread.join()
+        try:
+            self.test_add_symbols_and_check_availability()
+        finally:
+            server.shutdown()
+            thread.join()
 
         shutil.rmtree(self.test_symbols_path)
+
         print("Test done")
 
 
@@ -134,7 +137,7 @@ def configure_symbols_path():
 def find_symstore():
     for root, dirs, files in os.walk(symstore_root_looking):
         for f in files:
-            if f == symstore_exe_name:
+            if f == symstore_exe_name and 'x64' in root:
                 return join(root, f)
     return None
 
@@ -150,5 +153,6 @@ def configure_symstore():
 if __name__ == '__main__':
     configure_symstore()
 
+	# server adress to be changed index.html
     Tests().run()
     start_server()
