@@ -153,6 +153,6 @@ def configure_symstore():
 if __name__ == '__main__':
     configure_symstore()
 
-	# server adress to be changed index.html
+    # server adress to be changed index.html
     Tests().run()
     start_server()

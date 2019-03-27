@@ -3,6 +3,7 @@
 import imp
 import collections
 import json
+import sys
 import tempfile
 import shutil
 import traceback
@@ -107,4 +108,6 @@ try:
     handle_fields(extract_fields())
     print_json("success")
 except Exception as e:
-    print_json("error", str(e) + " -- " + traceback.format_exc())
+    message = str(e) + " -- " + traceback.format_exc()
+    print >> sys.stderr, message
+    print_json("error", message)
