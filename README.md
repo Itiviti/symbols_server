@@ -1,7 +1,7 @@
 # Symbols Server
 Provide http server for symbols (PDBs) and a way to manage them
 
-Currently, it is making available symbols through _symbols_ folder.
+Currently, it is making available symbols through the (mandatory) directory sent as parameter when starting the app.
 We can add new symbols using _/cgi-bin/add.py_. There is an example how to use it in _index.html_.
 
 It can be used together with this [gradle plugin](https://github.com/reeflog/gradle-symstoreserver-plugin) for continuous integration.

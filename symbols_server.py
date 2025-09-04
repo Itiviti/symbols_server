@@ -4,6 +4,9 @@ import json
 import tempfile
 import shutil
 import urllib.request
+import os
+import sys
+import argparse
 from http.server import HTTPServer
 from http.server import CGIHTTPRequestHandler
 from urllib.parse import urljoin
@@ -17,7 +20,6 @@ from symbols_server_common import *
 
 port = 80
 cgi_folder_name = 'cgi-bin'
-symbols_folder = 'symbols'
 history_file_path = '000Admin/history.txt'
 symstore_root_looking = 'C:\\Program Files (x86)\\Windows Kits\\'
 symstore_exe_name = 'symstore.exe'
@@ -119,20 +121,30 @@ class Tests:
         print("Test done")
 
 
-def start_server():
-    configure_symbols_path()
+def start_server(symbols_path=None):
+    configure_symbols_path(symbols_path)
     get_server().serve_forever()
 
 
-def configure_symbols_path():
-    symbols_path = join(os.curdir, symbols_folder)
-    symbols_abspath = path.abspath(symbols_path)
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Symbols Server')
+    parser.add_argument('--symbols-path',
+                       type=str,
+                       required=True,
+                       help='Path to the symbols directory')
+    parser.add_argument('--test',
+                       action='store_true',
+                       help='Run tests (uses temporary directory)')
+    return parser, parser.parse_args()
+
+
+def configure_symbols_path(symbols_path):
     if not path.exists(symbols_path):
-        raise Exception(
-            "Symbols path doesn't exists. It should be \"" + symbols_folder + "\" folder in root server folder: "
-            + symbols_abspath)
+        os.makedirs(symbols_path)
+        print("Created symbols directory: " + symbols_path)
+
     Env.set_symbols_repo_path(symbols_path)
-    print("Using symbols repository path: " + symbols_abspath)
+    print("Using symbols repository path: " + symbols_path)
 
 
 def find_symstore():
@@ -152,8 +164,12 @@ def configure_symstore():
 
 
 if __name__ == '__main__':
+    parser, args = parse_arguments()
+
     configure_symstore()
 
-    # server adress to be changed index.html
-    Tests().run()
-    start_server()
+    if args.test:
+        print("Running tests...")
+        Tests().run()
+    else:
+        start_server(args.symbols_path)
