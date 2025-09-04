@@ -18,17 +18,16 @@ import requests
 
 from symbols_server_common import *
 
-port = 80
 cgi_folder_name = 'cgi-bin'
 history_file_path = '000Admin/history.txt'
 symstore_root_looking = 'C:\\Program Files (x86)\\Windows Kits\\'
 symstore_exe_name = 'symstore.exe'
 
 
-def get_server():
+def get_server(port_num):
     handler = CGIHTTPRequestHandler
     handler.cgi_directories = ["/" + cgi_folder_name]
-    return HTTPServer(("", port), handler)
+    return HTTPServer(("", port_num), handler)
 
 
 class Tests:
@@ -40,11 +39,10 @@ class Tests:
     }
 
     def __init__(self):
-        pass
+        self.test_port = None
 
-    @staticmethod
-    def get_server_address():
-        return "http://localhost:" + str(port) + "/"
+    def get_server_address(self):
+        return "http://localhost:" + str(self.test_port) + "/"
 
     def get_cgi_address(self):
         return urljoin(self.get_server_address(), cgi_folder_name + "/")
@@ -102,7 +100,8 @@ class Tests:
         print("Starting test")
         Env.set_symbols_repo_path(self.test_symbols_path)
         os.mkdir(self.test_symbols_path)
-        server = get_server()
+        server = get_server(0)  # Use port 0 for tests to get any available port
+        self.test_port = server.server_address[1]
 
         def threaded_function():
             server.serve_forever()
@@ -121,9 +120,12 @@ class Tests:
         print("Test done")
 
 
-def start_server(symbols_path=None):
+def start_server(symbols_path, port_num):
     configure_symbols_path(symbols_path)
-    get_server().serve_forever()
+    server = get_server(port_num)
+    actual_port = server.server_address[1]
+    print(f"Server starting on port {actual_port}")
+    server.serve_forever()
 
 
 def parse_arguments():
@@ -132,6 +134,10 @@ def parse_arguments():
                        type=str,
                        required=True,
                        help='Path to the symbols directory')
+    parser.add_argument('--port',
+                       type=int,
+                       default=80,
+                       help='Port number (default: 80)')
     parser.add_argument('--test',
                        action='store_true',
                        help='Run tests (uses temporary directory)')
@@ -172,4 +178,4 @@ if __name__ == '__main__':
         print("Running tests...")
         Tests().run()
     else:
-        start_server(args.symbols_path)
+        start_server(args.symbols_path, args.port)
