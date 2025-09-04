@@ -1,6 +1,6 @@
-#!python
+#!/usr/bin/env python3
 
-import imp
+import importlib.util
 import collections
 import json
 import sys
@@ -9,18 +9,20 @@ import shutil
 import traceback
 import zipfile
 import subprocess
+import os
 from uuid import uuid4
 from os import path
 from os.path import join
 from cgi import FieldStorage
 
-symbols_server_common = imp.load_source('symbols_server_common', 'symbols_server_common.py')
+# Add parent directory to sys.path to import symbols_server_common
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from symbols_server_common import *
 
 
 fields_tuple = collections.namedtuple(
     "fields_tuple",
-    "zip_content, file_name, product_name product_version comment")
+    "zip_content file_name product_name product_version comment")
 
 
 def get_str_value(form, field_name):
@@ -28,7 +30,10 @@ def get_str_value(form, field_name):
     if value is None:
         return ""
     else:
-        return str(value)
+        if isinstance(value, bytes):
+            return value.decode('utf-8')
+        else:
+            return str(value)
 
 
 def extract_fields():
@@ -109,5 +114,5 @@ try:
     print_json("success")
 except Exception as e:
     message = str(e) + " -- " + traceback.format_exc()
-    print >> sys.stderr, message
+    print(message, file=sys.stderr)
     print_json("error", message)

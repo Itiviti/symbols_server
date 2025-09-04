@@ -1,12 +1,12 @@
-#!python
+#!/usr/bin/env python3
 
 import json
 import tempfile
 import shutil
-import urllib
-from BaseHTTPServer import HTTPServer
-from CGIHTTPServer import CGIHTTPRequestHandler
-from urlparse import urljoin
+import urllib.request
+from http.server import HTTPServer
+from http.server import CGIHTTPRequestHandler
+from urllib.parse import urljoin
 from uuid import uuid4
 from threading import Thread
 from os import path
@@ -73,17 +73,18 @@ class Tests:
                     Fields.product_name: product_name,
                     Fields.product_version: product_version,
                     Fields.comment: comment})
-            #print('result.content=' + result.content)
-            json_result = json.loads(result.content)
+            # print('result.content=' + result.content.decode('utf-8'))
+            json_result = json.loads(result.content.decode('utf-8'))
             assert json_result["status"] == "success", json_result["message"]
         dll_url = urljoin(self.get_symbols_address(), "System.Reactive.dll/A3630135134000/System.Reactive.dl_")
-        answer = urllib.urlopen(dll_url).read()
-        assert "error" not in answer
-        assert "Error" not in answer
-        assert "ERROR" not in answer
-        assert answer is not ""
+        answer = urllib.request.urlopen(dll_url).read()
+        assert b"error" not in answer
+        assert b"Error" not in answer
+        assert b"ERROR" not in answer
+        assert answer != b""
         history_url = urljoin(self.get_symbols_address(), history_file_path)
-        history = str.split(urllib.urlopen(history_url).read(), ',')
+        history = str.split(urllib.request.urlopen(history_url).read().decode('utf-8'), ',')
+        print("History: " + str(history))
         assert Tests.clean_history_value(history[5]) == product_name
         assert Tests.clean_history_value(history[6]) == product_version
         assert Tests.clean_history_value(history[7]) == comment
