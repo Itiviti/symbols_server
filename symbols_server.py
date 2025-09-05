@@ -36,8 +36,12 @@ class SymbolsServerHandler(CGIHTTPRequestHandler):
         parsed_path = urlparse(path)
         path = parsed_path.path
 
-        if path.startswith('/symbols/'):
-            symbols_path = path[9:]  # Remove '/symbols/' prefix
+        # Handle symbols directory requests (with or without trailing slash)
+        if path == '/symbols' or path.startswith('/symbols/'):
+            if path == '/symbols':
+                symbols_path = ''
+            else:
+                symbols_path = path[9:]  # Remove '/symbols/' prefix
             symbols_repo = Env.get_symbol_repo_path()
             local_path = join(symbols_repo, symbols_path)
             return local_path
