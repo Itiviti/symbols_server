@@ -7,16 +7,20 @@ import urllib.request
 import os
 import sys
 import argparse
-from http.server import HTTPServer
-from http.server import CGIHTTPRequestHandler, SimpleHTTPRequestHandler
+import zipfile
+import subprocess
 from urllib.parse import urljoin, urlparse
 from uuid import uuid4
 from threading import Thread
 from os import path
 from os.path import join
 import requests
+from flask import Flask, request, jsonify, send_from_directory, send_file
 
 from symbols_server_common import *
+
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024  # 100MB max file size
 
 cgi_folder_name = 'cgi-bin'
 history_file_path = '000Admin/history.txt'
@@ -24,36 +28,113 @@ symstore_root_looking = 'C:\\Program Files (x86)\\Windows Kits\\'
 symstore_exe_name = 'symstore.exe'
 
 
-class SymbolsServerHandler(CGIHTTPRequestHandler):
-    """Custom HTTP handler that serves CGI scripts and symbols directory"""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.cgi_directories = ["/" + cgi_folder_name]
-
-    def translate_path(self, path):
-        """Translate URL path to local file path"""
-        parsed_path = urlparse(path)
-        path = parsed_path.path
-
-        # Handle symbols directory requests (with or without trailing slash)
-        if path == '/symbols' or path.startswith('/symbols/'):
-            if path == '/symbols':
-                symbols_path = ''
-            else:
-                symbols_path = path[9:]  # Remove '/symbols/' prefix
-            symbols_repo = Env.get_symbol_repo_path()
-            local_path = join(symbols_repo, symbols_path)
-            return local_path
-
-        if path.startswith('/' + cgi_folder_name + '/'):
-            return super().translate_path(path)
-
-        return super().translate_path(path)
+@app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
 
 
-def get_server(port_num):
-    return HTTPServer(("", port_num), SymbolsServerHandler)
+@app.route('/symbols')
+@app.route('/symbols/')
+@app.route('/symbols/<path:filename>')
+def serve_symbols(filename=''):
+    symbols_repo = Env.get_symbol_repo_path()
+    full_path = join(symbols_repo, filename) if filename else symbols_repo
+
+    if os.path.isfile(full_path):
+        return send_file(full_path)
+    elif os.path.isdir(full_path):
+        try:
+            files = []
+            dirs = []
+            for item in os.listdir(full_path):
+                item_path = join(full_path, item)
+                if os.path.isdir(item_path):
+                    dirs.append(item + '/')
+                else:
+                    files.append(item)
+
+            html = f"""<!DOCTYPE html>
+<html>
+<head><title>Index of /symbols/{filename}</title></head>
+<body>
+<h1>Index of /symbols/{filename}</h1>
+<hr>
+<pre>
+"""
+            if filename:
+                html += '<a href="../">../</a>\n'
+
+            for dir_name in sorted(dirs):
+                url = f"/symbols/{filename}/{dir_name}" if filename else f"/symbols/{dir_name}"
+                html += f'<a href="{url}">{dir_name}</a>\n'
+
+            for file_name in sorted(files):
+                url = f"/symbols/{filename}/{file_name}" if filename else f"/symbols/{file_name}"
+                html += f'<a href="{url}">{file_name}</a>\n'
+
+            html += """</pre>
+<hr>
+</body>
+</html>"""
+            return html
+        except Exception as e:
+            return f"Error listing directory: {str(e)}", 500
+    else:
+        return "File not found", 404
+
+
+# Needed to support /cgi-bin/add.py as the symstore plugin expects this path
+@app.route('/cgi-bin/add.py', methods=['POST'])
+def add_symbols():
+    try:
+        if 'zip' not in request.files:
+            return jsonify({"status": "error", "message": "No zip file provided"}), 400
+
+        zip_file = request.files['zip']
+        if zip_file.filename == '':
+            return jsonify({"status": "error", "message": "No file selected"}), 400
+
+        product_name = request.form.get('product_name', '')
+        product_version = request.form.get('product_version', '')
+        comment = request.form.get('comment', '')
+
+        tmp_dir = join(tempfile.gettempdir(), "symbols_server_" + str(uuid4()))
+        os.mkdir(tmp_dir)
+
+        try:
+            zip_path = join(tmp_dir, zip_file.filename)
+            zip_file.save(zip_path)
+
+            if os.path.getsize(zip_path) == 0:
+                raise Exception("File is empty")
+
+            output_dir = join(tmp_dir, str(uuid4()))
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(output_dir)
+
+            comment_to_use = comment if comment else zip_file.filename
+            args = [Env.get_symstore_path(), "add",
+                    "/compress",
+                    "/r", "/f", output_dir,
+                    "/s", Env.get_symbol_repo_path(),
+                    "/t", product_name,
+                    "/v", product_version,
+                    "/c", comment_to_use]
+
+            print("Running command: " + " ".join(args))
+            process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+
+            if process.returncode != 0:
+                raise Exception(f"Command: {' '.join(args)} -- Output: {stdout.decode()} -- Errors: {stderr.decode()}")
+
+            return jsonify({"status": "success"})
+
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 class Tests:
@@ -93,12 +174,15 @@ class Tests:
         # act
         with open(zip_path, 'rb') as zip_file_input:
             result = requests.post(
-                urljoin(self.get_cgi_address(), "add.py"),
+                self.get_server_address() + "add",
                 files={
-                    Fields.zip: zip_file_input,
+                    Fields.zip: zip_file_input
+                },
+                data={
                     Fields.product_name: product_name,
                     Fields.product_version: product_version,
-                    Fields.comment: comment})
+                    Fields.comment: comment
+                })
             # print('result.content=' + result.content.decode('utf-8'))
             json_result = json.loads(result.content.decode('utf-8'))
             assert json_result["status"] == "success", json_result["message"]
@@ -126,20 +210,25 @@ class Tests:
         print("Starting test")
         Env.set_symbols_repo_path(self.test_symbols_path)
         os.mkdir(self.test_symbols_path)
-        server = get_server(0)  # Use port 0 for tests to get any available port
-        self.test_port = server.server_address[1]
 
-        def threaded_function():
-            server.serve_forever()
+        self.test_port = 51729
 
-        thread = Thread(target=threaded_function)
+        import threading
+
+        def run_flask():
+            app.run(host='localhost', port=self.test_port, debug=False, use_reloader=False)
+
+        thread = threading.Thread(target=run_flask)
+        thread.daemon = True
         thread.start()
+
+        import time
+        time.sleep(1)
 
         try:
             self.test_add_symbols_and_check_availability()
         finally:
-            server.shutdown()
-            thread.join()
+            pass  # Flask server will stop when thread ends
 
         shutil.rmtree(self.test_symbols_path)
 
@@ -148,18 +237,15 @@ class Tests:
 
 def start_server(symbols_path, port_num):
     configure_symbols_path(symbols_path)
-    server = get_server(port_num)
-    actual_port = server.server_address[1]
-    print(f"Server starting on port {actual_port}")
-    server.serve_forever()
+    print(f"Flask server starting on port {port_num}")
+    app.run(host='0.0.0.0', port=port_num, debug=False)
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Symbols Server')
     parser.add_argument('--symbols-path',
                        type=str,
-                       required=True,
-                       help='Path to the symbols directory')
+                       help='Path to the symbols directory (not required for tests)')
     parser.add_argument('--port',
                        type=int,
                        default=80,
@@ -204,4 +290,8 @@ if __name__ == '__main__':
         print("Running tests...")
         Tests().run()
     else:
+        if not args.symbols_path:
+            print("Error: --symbols-path is required when not running tests")
+            parser.print_help()
+            sys.exit(1)
         start_server(args.symbols_path, args.port)
