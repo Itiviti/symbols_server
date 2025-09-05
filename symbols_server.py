@@ -8,8 +8,8 @@ import os
 import sys
 import argparse
 from http.server import HTTPServer
-from http.server import CGIHTTPRequestHandler
-from urllib.parse import urljoin
+from http.server import CGIHTTPRequestHandler, SimpleHTTPRequestHandler
+from urllib.parse import urljoin, urlparse
 from uuid import uuid4
 from threading import Thread
 from os import path
@@ -24,10 +24,32 @@ symstore_root_looking = 'C:\\Program Files (x86)\\Windows Kits\\'
 symstore_exe_name = 'symstore.exe'
 
 
+class SymbolsServerHandler(CGIHTTPRequestHandler):
+    """Custom HTTP handler that serves CGI scripts and symbols directory"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cgi_directories = ["/" + cgi_folder_name]
+
+    def translate_path(self, path):
+        """Translate URL path to local file path"""
+        parsed_path = urlparse(path)
+        path = parsed_path.path
+
+        if path.startswith('/symbols/'):
+            symbols_path = path[9:]  # Remove '/symbols/' prefix
+            symbols_repo = Env.get_symbol_repo_path()
+            local_path = join(symbols_repo, symbols_path)
+            return local_path
+
+        if path.startswith('/' + cgi_folder_name + '/'):
+            return super().translate_path(path)
+
+        return super().translate_path(path)
+
+
 def get_server(port_num):
-    handler = CGIHTTPRequestHandler
-    handler.cgi_directories = ["/" + cgi_folder_name]
-    return HTTPServer(("", port_num), handler)
+    return HTTPServer(("", port_num), SymbolsServerHandler)
 
 
 class Tests:
@@ -48,7 +70,7 @@ class Tests:
         return urljoin(self.get_server_address(), cgi_folder_name + "/")
 
     def get_symbols_address(self):
-        return urljoin(self.get_server_address(), self.test_symbols_folder_name + "/")
+        return urljoin(self.get_server_address(), "symbols/")
 
     def test_add_symbols_and_check_availability(self):
         # prepare
